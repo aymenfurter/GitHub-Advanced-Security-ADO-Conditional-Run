@@ -1,0 +1,78 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: advancedsecurity.codeql.querysuite
+    value: security-extended
+  - name: advancedsecurity.submittoadvancedsecurity
+    value: true
+  - group: variables-adv-security
+
+stages:
+- stage: CheckAdvancedSecurity
+  jobs:
+  - job: Check
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - script: |
+        if [ -z "$PAT" ]; then
+          echo "Error: Personal Access Token is required"
+          exit 1
+        fi
+
+        # Define REST API URI for Advanced Security enablement status
+        URI="https://advsec.dev.azure.com/$ORG_NAME/$PROJECT_NAME/_apis/management/repositories/$REPO_NAME/enablement?api-version=7.1-preview"
+        echo $URI
+        # Make HTTP GET request
+        RESPONSE=$(curl -u "$USER:$PAT" -H "Content-Type: application/json" -X GET "$URI")
+        echo $RESPONSE
+
+        # Check if Advanced Security is enabled
+        if echo "$RESPONSE" | jq -r '.advSecEnabled' | grep -q 'true'; then
+          echo "Advanced Security is enabled for the repository $REPO_NAME."
+          echo "##vso[task.setvariable variable=AdvancedSecurityEnabled]true"
+        else
+          echo "Advanced Security is NOT enabled for the repository $REPO_NAME."
+          echo "##vso[task.setvariable variable=AdvancedSecurityEnabled]false"
+        fi
+
+      displayName: 'Check if Advanced Security enabled'
+      env:
+        PAT: $(pat)
+        USER: $(user)
+        ORG_NAME: $(org_name)
+        REPO_NAME: $(repo_name)
+        PROJECT_NAME: $(project_name)
+
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '14.x'
+      displayName: 'Install Node.js'
+
+    - script: |
+        npm install -g @angular/cli@1.0.0-beta.28.3
+        npm install
+      displayName: 'npm install and build'
+
+    - task: AdvancedSecurity-Dependency-Scanning@1 
+      displayName: 'Dependency Scanning'
+      condition: eq(variables['AdvancedSecurityEnabled'], 'true')
+
+    - task: AdvancedSecurity-Codeql-Init@1
+      inputs:
+        languages: 'javascript'
+      displayName: 'Initialize CodeQL'
+      condition: eq(variables['AdvancedSecurityEnabled'], 'true')
+
+    - script: |
+        ng set --global warnings.packageDeprecation=false
+        ng build --prod || true
+      displayName: 'Build Application'
+
+    - task: AdvancedSecurity-Codeql-Analyze@1
+      displayName: 'CodeQL Analysis'
+      condition: eq(variables['AdvancedSecurityEnabled'], 'true')
