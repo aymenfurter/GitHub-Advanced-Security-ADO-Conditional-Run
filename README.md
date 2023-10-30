@@ -1,5 +1,5 @@
 # GitHub Advanced Security - Conditional Run Demo
-This demo showcases conditional execution of GitHub Advanced Security tasks in Azure DevOps pipelines, depending on the enablement status for a specific ADO repository.
+This demo showcases conditional execution of GitHub Advanced Security tasks in Azure DevOps pipelines, depending on the enablement status for a specific ADO repository. Use at your own risk, the API used is undocumented.
 
 ## Quick Start
 1. Set required secrets and environment variables in your ADO pipeline.
